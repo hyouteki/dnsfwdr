@@ -93,18 +93,17 @@ int main() {
             exit(EXIT_FAILURE);
         }
 
-        printf("Debug: received(%d) bytes from %s:%d\n", recv_len,
+        printf("Log: received(%d) bytes from %s:%d\n", recv_len,
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
         Dns_Header header = Dns_ParseHeader(buffer);
 		printf("Log: Header(id=%d, qdcount=%d, ancount=%d nscount=%d arcount=%d)\n",
 			   header.id, header.qdcount, header.ancount, header.nscount, header.arcount);
 
-		printf("%s\n", &buffer[12]);
+		Dns_Question question = Dns_ParseQuestion(buffer);
+		printf("Log: Question(qname=%s, qtype=%d, qclass=%d)\n",
+			   question.qname, question.qtype, question.qclass);
 		parse_dns_query(buffer, recv_len);
-	   
-
-        // Process the received data
     }
 	
 	close(sockfd);

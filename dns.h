@@ -14,6 +14,8 @@
 #define Dns_ResponseNameEror 3
 #define Dns_ResponseServerFailure 5
 
+#define Dns_QuestionMaxLen 256
+
 typedef struct Dns_Header {
 	unsigned short id;      // 16 bit  2
 	short qr;               //  1 bit  3
@@ -30,9 +32,16 @@ typedef struct Dns_Header {
 	unsigned int arcount;   // 16 bit 12
 } Dns_Header;
 
+typedef struct Dns_Question {
+	char *qname;
+	unsigned short qtype;
+	unsigned short qclass;
+} Dns_Question;
+
 static short Dns_ReadBit(char *, int);
 
 Dns_Header Dns_ParseHeader(char *);
+Dns_Question Dns_ParseQuestion(char *);
 
 static short Dns_ReadBit(char *ch, int num) {
 	if (num < 0 || num > 8) {
@@ -70,20 +79,53 @@ Dns_Header Dns_ParseHeader(char *buffer) {
 	}
 
 	unsigned short qdcount = buffer[itr++];
-	id << 8; id += buffer[itr++];
+	qdcount << 8; qdcount += buffer[itr++];
 
 	unsigned short ancount = buffer[itr++];
-	id << 8; id += buffer[itr++];
+	ancount << 8; ancount += buffer[itr++];
 
 	unsigned short nscount = buffer[itr++];
-	id << 8; id += buffer[itr++];
+	nscount << 8; nscount += buffer[itr++];
 
 	unsigned short arcount = buffer[itr++];
-	id << 8; id += buffer[itr++];
+	arcount << 8; arcount += buffer[itr++];
 	
 	return (Dns_Header){.id=id, .qr=qr, .opcode=opcode, .aa=aa, .tc=tc, .rd=rd,
 						.ra=ra, .z=z, .rcode=rcode, .qdcount=qdcount, .ancount=ancount,
 						.nscount=nscount, .arcount=arcount};
+}
+
+Dns_Question Dns_ParseQuestion(char *buffer) {	
+    char qname[Dns_QuestionMaxLen];
+    memset(qname, 0, sizeof(qname));
+	
+    int itr = 12, qnameItr = 0;
+
+    while (buffer[itr]) {
+        int len = buffer[itr++];
+
+        if (!len) break;
+        else if (len >= 192) {
+            itr++;
+            break;
+        }
+
+        for (int i = 0; i < len; i++) qname[qnameItr++] = buffer[itr++];
+        if (buffer[itr]) qname[qnameItr++] = '.';
+		else {
+            itr++;
+            break;
+        }
+    }
+
+	
+	unsigned short qtype = buffer[itr++];
+	qtype << 8; qtype += buffer[itr++];
+	
+	unsigned short qclass = buffer[itr++];
+	qclass << 8; qclass += buffer[itr++];
+
+    return (Dns_Question){.qname=qname, .qtype=qtype, .qclass=qclass};
 }
 
 #endif // DNSFWDR_DNS_H_
