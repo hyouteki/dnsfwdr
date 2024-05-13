@@ -10,54 +10,46 @@
 
 #define BUFFER_SIZE 1024
 #define PORT 8989
+#define DNS_IP "8.8.8.8"
+#define DNS_PORT 53
 
-void error(const char *msg) {
-    perror(msg);
-    exit(1);
-}
+char *ForwardRequest(char *, int, int *);
 
-void parse_dns_query(const char *buffer, int buflen) {
-    // DNS header is 12 bytes
-    // Skipping header for now
-    int pos = 12;
+char *ForwardRequest(char *buffer, int buffer_size, int *response_size) {
+	int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (sockfd < 0) {
+		perror("Error: socket creation failed\n");
+		exit(EXIT_FAILURE);
+	}
 
-    // Buffer to store domain name
-    char domain_name[256];
-    memset(domain_name, 0, sizeof(domain_name));
-    int domain_pos = 0;
+	struct sockaddr_in server_addr;
+	memset(&server_addr, 0, sizeof(server_addr));
+	server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(DNS_PORT);
+    if (inet_pton(AF_INET, DNS_IP, &server_addr.sin_addr) <= 0) {
+        perror("Error: IP invalid\n");
+        exit(EXIT_FAILURE);
+    }
+	
+    sendto(sockfd, buffer, buffer_size, 0,
+		   (struct sockaddr *)&server_addr, sizeof(server_addr));
 
-    // Extracting domain name from question section
-    while (pos < buflen) {
-        int label_len = buffer[pos++];
-
-        if (label_len == 0) {
-            // End of domain name
-            break;
-        } else if (label_len >= 192) {
-            // Pointer, skip to another offset
-            pos++;
-            break;
-        }
-
-        // Copy label to domain_name buffer
-        for (int i = 0; i < label_len; i++) {
-            domain_name[domain_pos++] = buffer[pos++];
-        }
-        domain_name[domain_pos++] = '.';
-
-        // Check for next label
-        if (buffer[pos] == 0) {
-            // End of domain name
-            pos++;
-            break;
-        }
+	char *dns_response_buffer = (char *)malloc(sizeof(char)*BUFFER_SIZE);
+	memset(dns_response_buffer, 0, BUFFER_SIZE);
+	
+    struct sockaddr_in recv_addr;
+	int recv_size = sizeof(recv_addr);
+	*response_size = recvfrom(sockfd, dns_response_buffer, BUFFER_SIZE, 0,
+							(struct sockaddr *)&recv_addr, &recv_size);
+    if (!*response_size) {
+        perror("Error: DNS response receive error\n");
+        exit(EXIT_FAILURE);
     }
 
-    // Skipping QTYPE and QCLASS
-    pos += 4;
+	printf("|\tDNS RESPONSE RECEIVED\n");
 
-    // Print the parsed domain name
-    printf("Parsed domain name: %s\n", domain_name);
+    close(sockfd);
+    return dns_response_buffer;
 }
 
 int main() {
@@ -66,7 +58,6 @@ int main() {
 		perror("Error: socket creation failed\n");
 		exit(EXIT_FAILURE);
 	}
-	printf("Debug: socket created\n");
 
 	struct sockaddr_in server_addr;
 	memset(&server_addr, 0, sizeof(server_addr));
@@ -78,10 +69,9 @@ int main() {
 		perror("Error: socket bind failed\n");
 		exit(EXIT_FAILURE);
 	}
-	printf("Debug: socket bind\n");
-	printf("Debug: UDP server running ...\n");
 
-	char buffer[BUFFER_SIZE];
+	char *buffer = (char *)malloc(sizeof(char)*BUFFER_SIZE);
+	memset(buffer, 0, BUFFER_SIZE);
     while (1) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
@@ -97,13 +87,26 @@ int main() {
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
         Dns_Header header = Dns_ParseHeader(buffer);
-		printf("Log: Header(id=%d, qdcount=%d, ancount=%d nscount=%d arcount=%d)\n",
+		printf("|\tHeader(id=%d, qdcount=%d, ancount=%d nscount=%d arcount=%d)\n",
 			   header.id, header.qdcount, header.ancount, header.nscount, header.arcount);
 
 		Dns_Question question = Dns_ParseQuestion(buffer);
-		printf("Log: Question(qname=%s, qtype=%d, qclass=%d)\n",
+		printf("|\tQuestion(qname=%s, qtype=%d, qclass=%d)\n",
 			   question.qname, question.qtype, question.qclass);
-		parse_dns_query(buffer, recv_len);
+		
+		printf("|\tFORWARDING REQUEST\n");
+
+		int response_size;
+		char *dns_response = ForwardRequest(buffer, recv_len, &response_size);
+
+		if (sendto(sockfd, dns_response, response_size, 0,
+				   (struct sockaddr *)&client_addr, client_len) < 0) {
+			close(sockfd);
+			perror("Error: could not send DNS response back to client\n");
+			exit(EXIT_FAILURE);
+		}
+		printf("|\tDNS RESPONSE SENT\n");
+		
     }
 	
 	close(sockfd);

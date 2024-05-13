@@ -2,6 +2,7 @@
 #define DNSFWDR_DNS_H_
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #define Dns_Query 0
 #define Dns_Response 1
@@ -96,7 +97,7 @@ Dns_Header Dns_ParseHeader(char *buffer) {
 }
 
 Dns_Question Dns_ParseQuestion(char *buffer) {	
-    char qname[Dns_QuestionMaxLen];
+    char *qname = (char *)malloc(sizeof(char)*Dns_QuestionMaxLen);
     memset(qname, 0, sizeof(qname));
 	
     int itr = 12, qnameItr = 0;
@@ -117,7 +118,6 @@ Dns_Question Dns_ParseQuestion(char *buffer) {
             break;
         }
     }
-
 	
 	unsigned short qtype = buffer[itr++];
 	qtype << 8; qtype += buffer[itr++];
