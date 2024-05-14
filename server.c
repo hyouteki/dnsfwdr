@@ -7,27 +7,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "dns.h"
+#include "dns_cache.h"
+#include "helper.h"
 
-#define Buffer_Size 1024
 #define Port 8989
 #define Dns_Ip "8.8.8.8"
 #define Dns_Port 53
-#define Error(message) ({fprintf(stderr, "Error: %s\n", message); \
-			exit(EXIT_FAILURE);}) 
 
-typedef struct Buffer {
-	char *buffer;
-	int size;
-} Buffer;
-
-Buffer Buffer_Init();
 Buffer ForwardRequest(Buffer);
-
-Buffer Buffer_Init() {
-	char *buffer = (char *)malloc(sizeof(char)*Buffer_Size);
-	memset(buffer, 0, Buffer_Size);
-	return (Buffer){.buffer=buffer, .size=0};
-}
 
 Buffer ForwardRequest(Buffer query) {
 	int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -57,6 +44,8 @@ Buffer ForwardRequest(Buffer query) {
 }
 
 int main() {
+	Dns_Cache cache = {0};
+	
 	int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (!sockfd) Error("socket creation failed");
 
@@ -89,11 +78,18 @@ int main() {
 		Dns_Question question = Dns_ParseQuestion(query.buffer);
 		printf("|\tQuestion(qname=%s, qtype=%d, qclass=%d)\n",
 			   question.qname, question.qtype, question.qclass);
+
+		Buffer response;
+		if (Dns_CacheFind(&cache, question.qname)) {
+			printf("|\tCACHE HIT\n");
+			response = Dns_CacheLookup(&cache, question.qname);
+			strncpy(response.buffer, query.buffer, Dns_HeaderLen);
+		} else {
+			printf("|\tREQUEST FORWARDED\n");
+			response = ForwardRequest(query);
+			Dns_CacheInsert(&cache, question.qname, response);
+		}
 		
-		printf("|\tREQUEST FORWARDED\n");
-
-		Buffer response = ForwardRequest(query);
-
 		if (sendto(sockfd, response.buffer, response.size, 0,
 				   (struct sockaddr *)&client_addr, client_len) < 0) {
 			close(sockfd);

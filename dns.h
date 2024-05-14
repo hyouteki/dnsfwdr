@@ -15,6 +15,7 @@
 #define Dns_ResponseNameEror 3
 #define Dns_ResponseServerFailure 5
 
+#define Dns_HeaderLen 12
 #define Dns_QuestionMaxLen 256
 
 typedef struct Dns_Header {
