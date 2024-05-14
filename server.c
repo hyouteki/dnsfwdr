@@ -50,7 +50,7 @@ Buffer ForwardRequest(Buffer query) {
 	response.size = recvfrom(sockfd, response.buffer, Buffer_Size, 0,
 							 (struct sockaddr *)&recv_addr, &recv_size);
     if (!response.size) Error("DNS response receive error");
-	printf("|\tDNS RESPONSE RECEIVED\n");
+	printf("|\tRESPONSE RECEIVED\n");
 
     close(sockfd);
     return response;
@@ -90,7 +90,7 @@ int main() {
 		printf("|\tQuestion(qname=%s, qtype=%d, qclass=%d)\n",
 			   question.qname, question.qtype, question.qclass);
 		
-		printf("|\tFORWARDING REQUEST\n");
+		printf("|\tREQUEST FORWARDED\n");
 
 		Buffer response = ForwardRequest(query);
 
@@ -99,7 +99,7 @@ int main() {
 			close(sockfd);
 			Error("could not send DNS response back to client");
 		}
-		printf("|\tDNS RESPONSE SENT\n");
+		printf("|\tRESPONSE SENT\n");
     }
 	
 	close(sockfd);
