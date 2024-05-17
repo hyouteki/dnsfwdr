@@ -6,9 +6,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include "dns.h"
-#include "dns_cache.h"
-#include "helper.h"
+#include "dns/header.h"
+#include "dns/cache.h"
+#include "dns/utils.h"
+#include "dns/block.h"
 
 #define Port 8989
 #define Dns_Ip "8.8.8.8"
@@ -46,6 +47,9 @@ Buffer ForwardRequest(Buffer query) {
 int main() {
 	Dns_Cache cache = {0};
 	
+	Dns_BlockList block_list = {0};
+	Dns_BlockListInit(&block_list, "block_list.txt");
+	
 	int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (!sockfd) Error("socket creation failed");
 
@@ -77,8 +81,24 @@ int main() {
 
 		Dns_Question question = Dns_ParseQuestion(query.buffer);
 		printf("|\tQuestion(qname=%s, qtype=%d, qclass=%d)\n",
-			   question.qname, question.qtype, question.qclass);
+			   question.qname, question.qtype, question.qclass);		
 
+		if (Dns_BlockListFind(&block_list, question.qname)) {
+			Dns_Header response_header = {0};
+			response_header.id = header.id;
+			response_header.qr = Dns_Response;
+			response_header.rcode = Dns_ResponseNameError;
+
+			char *response_buffer = Dns_DeconstructHeader(response_header);
+			if (sendto(sockfd, response_buffer, Dns_HeaderLen, 0,
+				   (struct sockaddr *)&client_addr, client_len) < 0) {
+				close(sockfd);
+				Error("could not send DNS response back to client");
+			}
+			printf("|\tBLOCK LIST HIT\n");
+			continue;
+		}
+		
 		Buffer response;
 		if (Dns_CacheFind(&cache, question.qname)) {
 			printf("|\tCACHE HIT\n");

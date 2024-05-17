@@ -1,5 +1,5 @@
-#ifndef DNSFWDR_DNS_H_
-#define DNSFWDR_DNS_H_
+#ifndef DNSFWDR_DNS_HEADER_H_
+#define DNSFWDR_DNS_HEADER_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,26 +12,26 @@
 #define Dns_OpcodeServerStatus 2
 
 #define Dns_ResponseNoError 0
-#define Dns_ResponseNameEror 3
+#define Dns_ResponseNameError 3
 #define Dns_ResponseServerFailure 5
 
 #define Dns_HeaderLen 12
 #define Dns_QuestionMaxLen 256
 
 typedef struct Dns_Header {
-	unsigned short id;      // 16 bit  2
-	short qr;               //  1 bit  3
-	short opcode;           //  4 bit  3
-	short aa;               //  1 bit  3
-	short tc;               //  1 bit  3
-	short rd;               //  1 bit  3
-	short ra;               //  1 bit  4
-	short z;                //  3 bit  4 (must be 0)
-	short rcode;            //  4 bit  4
-	unsigned int qdcount;   // 16 bit  6
-	unsigned int ancount;   // 16 bit  8
-	unsigned int nscount;   // 16 bit 10
-	unsigned int arcount;   // 16 bit 12
+	unsigned int id: 16;
+	unsigned int qr: 1;
+	unsigned int opcode: 4;
+	unsigned int aa: 1;
+	unsigned int tc: 1;
+	unsigned int rd: 1;
+	unsigned int ra: 1;
+	unsigned int z: 3;
+	unsigned int rcode: 4;
+	unsigned int qdcount: 16;
+	unsigned int ancount: 16;
+	unsigned int nscount: 16;
+	unsigned int arcount: 16;
 } Dns_Header;
 
 typedef struct Dns_Question {
@@ -44,6 +44,7 @@ static short Dns_ReadBit(char *, int);
 
 Dns_Header Dns_ParseHeader(char *);
 Dns_Question Dns_ParseQuestion(char *);
+char *Dns_DeconstructHeader(Dns_Header);
 
 static short Dns_ReadBit(char *ch, int num) {
 	if (num < 0 || num > 8) {
@@ -129,4 +130,30 @@ Dns_Question Dns_ParseQuestion(char *buffer) {
     return (Dns_Question){.qname=qname, .qtype=qtype, .qclass=qclass};
 }
 
-#endif // DNSFWDR_DNS_H_
+char *Dns_DeconstructHeader(Dns_Header header) {
+	char *buffer = (char *)malloc(sizeof(char)*Dns_HeaderLen);
+
+	buffer[0] = (header.id & 0x0000FF00) >> 8;
+	buffer[1] = header.id & 0x000000FF;
+
+	buffer[2] = header.qr << 7 + header.opcode << 3 + \
+		header.aa << 2 + header.tc << 1 + header.rd;
+
+	buffer[3] = header.ra << 7 + header.z << 4 + header.rcode;
+
+	buffer[4] = (header.qdcount & 0x0000FF00) >> 8;
+	buffer[5] = (header.qdcount & 0x000000FF) >> 8;
+	
+	buffer[6] = (header.ancount & 0x0000FF00) >> 8;
+	buffer[7] = (header.ancount & 0x000000FF) >> 8;
+	
+	buffer[8] = (header.nscount & 0x0000FF00) >> 8;
+	buffer[9] = (header.nscount & 0x000000FF) >> 8;
+
+	buffer[10] = (header.arcount & 0x0000FF00) >> 8;
+	buffer[11] = (header.arcount & 0x000000FF) >> 8;
+
+	return buffer;
+} 
+
+#endif // DNSFWDR_DNS_HEADER_H_

@@ -7,7 +7,6 @@
 - [ ] concurrent connections
 - [ ] mapping response to client
 - [ ] caching
-- [ ] filtering
 - [ ] support for falling back to different dns server
 
 ## Demo
